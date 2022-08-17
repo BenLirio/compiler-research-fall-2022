@@ -1,5 +1,7 @@
 # Compiler Research
+
 **Student**: Ben Lirio
+
 **Professor**: Eric Koskinen
 
 ## Background
