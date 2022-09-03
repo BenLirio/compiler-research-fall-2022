@@ -6,18 +6,6 @@ ARG RUNTIME_BASE=public.ecr.aws/e2k5g4z0/mcsema:llvm10-ubuntu18.04-amd64
 ARG BUILD_BASE=ubuntu:18.04
 
 ##############################
-##### Run Dependencies #######
-##############################
-FROM ${RUNTIME_BASE} as runtime-dependencies
-RUN apt-get update -y && apt-get upgrade -y
-## (optional) Program tools
-RUN apt-get install vim clang -y
-
-## (fix on only for ubuntu:20.04) Update deprecated protobuf version
-#RUN sed -i 's/3.2.0/3.20.1/g' /opt/trailofbits/lib/python3/site-packages/mcsema_disass-3.1.3.8-py3.8.egg/EGG-INFO/requires.txt
-#RUN pip3 install protobuf==3.20.1
-
-##############################
 ##### Build Dependencies #####
 ##############################
 FROM ${BUILD_BASE} as build-dependencies
@@ -47,10 +35,17 @@ RUN gunzip /artifacts/${IDA_DIST}.tar.gz
 RUN tar xf /artifacts/${IDA_DIST}.tar -C /artifacts
 
 ##############################
+##### Run Dependencies #######
+##############################
+FROM ${RUNTIME_BASE} as runtime-dependencies
+RUN apt-get update -y && apt-get upgrade -y
+COPY --from=build /artifacts/llvm /llvm
+COPY --from=build /artifacts/ida /ida
+## (optional) Program tools
+RUN apt-get install vim clang -y
+
+##############################
 ########## Run ###############
 ##############################
 FROM runtime-dependencies
-COPY --from=build /artifacts/llvm /llvm
-COPY --from=build /artifacts/ida /ida
-COPY scripts scripts
 ENTRYPOINT "/bin/bash"
