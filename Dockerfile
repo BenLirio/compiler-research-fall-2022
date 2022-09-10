@@ -11,14 +11,22 @@ ENV ARTIFACT_DOMAIN=artifacts-compiler-research-fall-2022.s3-website-us-east-1.a
 ENV IDA_DIST=ida
 ADD http://${ARTIFACT_DOMAIN}/${IDA_DIST}.tar.gz.enc /artifacts/
 RUN apt-get update -y && apt-get upgrade -y
-RUN apt-get install openssl -y
+RUN apt-get install openssl clang -y
 COPY ida-src.key /
+
+RUN mkdir -p /opt/CLI11
+ADD https://github.com/CLIUtils/CLI11/releases/download/v2.2.0/CLI11.hpp /opt/CLI11/
+
 
 # Unencrypt and extract IDA
 FROM build-dependencies as build
 RUN openssl enc -d -aes-256-cbc -in /artifacts/${IDA_DIST}.tar.gz.enc -out /artifacts/${IDA_DIST}.tar.gz -kfile /ida-src.key -iter 3
 RUN gunzip /artifacts/${IDA_DIST}.tar.gz
 RUN tar xf /artifacts/${IDA_DIST}.tar -C /artifacts
+
+COPY src src
+RUN clang++ /src/lift/main.cpp -o /artifacts/lift
+
 
 
 # 2. Setup Runtime
@@ -33,10 +41,11 @@ RUN sed -i 's/3.15.0/3.20.0/g' /opt/trailofbits/lib/python3/site-packages/mcsema
 RUN pip3 install protobuf==3.20.0
 # Development is done inside this container so vim and clang are useful
 RUN apt-get install vim clang -y
+COPY --from=build /artifacts/lift /usr/bin/lift
 
 # Copy source code and enter bash
 FROM runtime-dependencies
 RUN /ida/idapyswitch --auto-apply
-COPY src src
-WORKDIR "/src"
-ENTRYPOINT "/bin/bash"
+COPY runtime runtime
+WORKDIR runtime
+ENTRYPOINT /bin/bash
