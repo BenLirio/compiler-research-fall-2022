@@ -40,12 +40,13 @@ COPY ida.reg /root/.idapro/
 RUN sed -i 's/3.15.0/3.20.0/g' /opt/trailofbits/lib/python3/site-packages/mcsema_disass-3.1.3.8-py3.8.egg/EGG-INFO/requires.txt
 RUN pip3 install protobuf==3.20.0
 # Development is done inside this container so vim and clang are useful
-RUN apt-get install vim clang -y
+RUN apt-get install vim clang cmake libz-dev -y
+RUN mkdir -p /opt/CLI11
+ADD https://github.com/CLIUtils/CLI11/releases/download/v2.2.0/CLI11.hpp /opt/CLI11/
+ENV CPATH=${CPATH}:/opt/CLI11
 COPY --from=build /artifacts/lift /usr/bin/lift
 
 # Copy source code and enter bash
 FROM runtime-dependencies
 RUN /ida/idapyswitch --auto-apply
-COPY runtime runtime
-WORKDIR runtime
 ENTRYPOINT /bin/bash

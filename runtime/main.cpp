@@ -12,58 +12,58 @@
 #include "llvm/Passes/PassBuilder.h"
 #include "llvm/Bitcode/BitcodeWriter.h"
 
+#include <CLI11.hpp>
+
 using namespace llvm;
 
-static cl::opt<std::string> FileName(cl::Positional, cl::desc("Bitcode file"), cl::Required);
-static cl::opt<std::string> OutputName(cl::Positional, cl::desc("Bitcode output"), cl::Required);
+struct Args {
+	std::string input_filename;
+	std::string output_filename;
+};
 
-int main(int argc, char** argv)
-{
-	cl::ParseCommandLineOptions(argc, argv, "LLVM hello world\n");
+
+Args mustParseArgs(int argc, char** argv) {
+	Args args;
+	CLI::App app{"Clean lifted LLVM IR"};
+	app.option_defaults()->required();
+	std::string input_filename, output_filename;
+	app.add_option("--input", input_filename, "Input LLVM IR");
+	app.add_option("--output", output_filename, "Output LLVM IR");
+	try {
+		app.parse(argc, argv);
+	} catch (const CLI::ParseError &e) {
+		app.exit(e);
+		exit(1);
+	}
+	return args;
+}
+
+std::unique_ptr<Module> mustReadIR(std::string filename) {
 	LLVMContext context;
-
-	ErrorOr<std::unique_ptr<MemoryBuffer>> mb = MemoryBuffer::getFile(FileName);
+	ErrorOr<std::unique_ptr<MemoryBuffer>> mb = MemoryBuffer::getFile(filename);
 	if (std::error_code ec = mb.getError()) {
 		errs() << ec.message();
-		return -1;
+		exit(1);
 	}
 
 	Expected<std::unique_ptr<Module>> m = parseBitcodeFile(mb->get()->getMemBufferRef(), context);
 	if (std::error_code ec = errorToErrorCode(m.takeError())) {
 		errs() << "Error reading bitcode: " << ec.message() << "\n";
-		return -1;
+		exit(1);
 	}
-
-	// Create the analysis managers.
-	LoopAnalysisManager LAM;
-	FunctionAnalysisManager FAM;
-	CGSCCAnalysisManager CGAM;
-	ModuleAnalysisManager MAM;
-
-	// Create the new pass manager builder.
-	// Take a look at the PassBuilder constructor parameters for more
-	// customization, e.g. specifying a TargetMachine or various debugging
-	// options.
-	PassBuilder PB;
-
-	// Register all the basic analyses with the managers.
-	PB.registerModuleAnalyses(MAM);
-	PB.registerCGSCCAnalyses(CGAM);
-	PB.registerFunctionAnalyses(FAM);
-	PB.registerLoopAnalyses(LAM);
-	PB.crossRegisterProxies(LAM, FAM, CGAM, MAM);
-
-	// Create the pass manager.
-	// This one corresponds to a typical -O2 optimization pipeline.
-	ModulePassManager MPM = PB.buildPerModuleDefaultPipeline(PassBuilder::OptimizationLevel::O2);
-
-	// Optimize the IR!
-	MPM.run(**m, MAM);
-
+	return std::move(*m);
+}
+void mustWriteIR(std::unique_ptr<Module> M, std::string filename) {
 	std::error_code EC;
-	llvm::raw_fd_ostream OS(OutputName, EC, llvm::sys::fs::F_None);
-	WriteBitcodeToFile(**m, OS);
+	llvm::raw_fd_ostream OS(filename, EC, sys::fs::F_None);
+	WriteBitcodeToFile(*M, OS);
 	OS.flush();
+}
 
+int main(int argc, char** argv) {
+	Args args = mustParseArgs(argc, argv);
+	std::unique_ptr<Module> M = mustReadIR(args.input_filename);
+	// transform M
+	mustWriteIR(std::move(M), args.output_filename);
 	return 0;
 }
