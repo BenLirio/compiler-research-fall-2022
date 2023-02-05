@@ -22,7 +22,7 @@ struct Args {
 };
 
 
-Args mustParseArgs(int argc, char** argv) {
+Args parseArgs(int argc, char** argv) {
 	Args args;
 	CLI::App app{"Clean lifted LLVM IR"};
 	app.option_defaults()->required();
@@ -33,37 +33,35 @@ Args mustParseArgs(int argc, char** argv) {
 		app.parse(argc, argv);
 	} catch (const CLI::ParseError &e) {
 		app.exit(e);
-		exit(1);
+		throw e;
 	}
 	return args;
 }
 
-std::unique_ptr<Module> mustReadIR(std::string filename) {
+std::unique_ptr<Module> readIR(std::string filename) {
 	LLVMContext context;
 	ErrorOr<std::unique_ptr<MemoryBuffer>> mb = MemoryBuffer::getFile(filename);
-	if (std::error_code ec = mb.getError()) {
-		errs() << ec.message();
-		exit(1);
-	}
+	if (std::error_code ec = mb.getError()) { throw ec; }
 
 	Expected<std::unique_ptr<Module>> m = parseBitcodeFile(mb->get()->getMemBufferRef(), context);
-	if (std::error_code ec = errorToErrorCode(m.takeError())) {
-		errs() << "Error reading bitcode: " << ec.message() << "\n";
-		exit(1);
-	}
+	if (std::error_code ec = errorToErrorCode(m.takeError())) { throw ec; }
 	return std::move(*m);
 }
-void mustWriteIR(std::unique_ptr<Module> M, std::string filename) {
-	std::error_code EC;
-	llvm::raw_fd_ostream OS(filename, EC, sys::fs::F_None);
+
+void writeIR(std::unique_ptr<Module> M, std::string filename) {
+	std::error_code ec;
+	llvm::raw_fd_ostream OS(filename, ec, sys::fs::F_None);
 	WriteBitcodeToFile(*M, OS);
+	if (ec) { throw ec; }
 	OS.flush();
 }
 
 int main(int argc, char** argv) {
-	Args args = mustParseArgs(argc, argv);
-	std::unique_ptr<Module> M = mustReadIR(args.input_filename);
-	// transform M
-	mustWriteIR(std::move(M), args.output_filename);
+	try {
+		Args args = mustParseArgs(argc, argv);
+		std::unique_ptr<Module> M = mustReadIR(args.input_filename);
+		// transform M
+		mustWriteIR(std::move(M), args.output_filename);
+	} catch (
 	return 0;
 }

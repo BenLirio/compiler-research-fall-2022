@@ -1,0 +1,4 @@
+/src/build/CMakeFiles/rebuild_cache.dir
+/src/build/CMakeFiles/edit_cache.dir
+/src/build/CMakeFiles/transform-ir.dir
+/src/build/CMakeFiles/intrinsics_gen.dir
